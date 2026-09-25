@@ -1,0 +1,106 @@
+.TH RECOIL16 7 "2026-09-25" "recoil16" "recoil16"
+.SH NAME
+recoil16 \- drivers and tools for the PCSpecialist Recoil 16 AMD (TUXEDO Stellaris 16 Gen7)
+.SH DESCRIPTION
+The recoil16 package builds four kernel modules with DKMS and installs
+\fBrecoil16ctl\fR(1) to control them:
+.TP
+.B uniwill-laptop
+Fn keys (keyboard backlight, Sc), firmware power modes as a platform profile,
+battery charge limit, Fn lock, Super-key lock, fan and temperature sensors.
+Replaces the stock module; needs kernel 7.2 or newer.
+.TP
+.B ite8291-mono
+Keyboard backlight (white, 0\-50), as \fI/sys/class/leds/ite8291:white:kbd_backlight\fR.
+.TP
+.B ite8233-lightbar
+RGB lightbar, as \fI/sys/class/leds/rgb:lightbar\fR.
+.TP
+.B copilot-rctrl
+Turns the Copilot key back into Right Ctrl (an i8042 filter; no virtual input device).
+.PP
+On kernels older than 7.2 (for example a 6.18 LTS fallback) only
+\fBite8291-mono\fR, \fBite8233-lightbar\fR and \fBcopilot-rctrl\fR are built.
+.SH SETUP
+.TP
+.B Check
+Run \fBrecoil16ctl check\fR after installing, after upgrades and after kernel
+updates. It checks the kernel, modules, DKMS, charge limit, power profile,
+keyboard, lightbar, Copilot filter, sensors and the Sc shortcut, and lists the
+checks that need a person.
+.TP
+.B Charge limit
+Set it in the desktop's power settings, or with
+\fBsudo recoil16ctl battery limit\fR \fIpercent\fR. The embedded controller
+keeps the limit across reboots, charger changes and suspend; the command also
+writes a udev rule that re-applies it whenever the driver loads. While the
+battery is held at the limit its status reads "Not charging".
+.TP
+.B Sc key (KDE Plasma)
+Rotates the screen 180\(de from the first login after installing. The default
+shortcut is listed as \fIRecoil 16 \(-> Rotate Screen 180\(de\fR in
+System Settings \(-> Keyboard \(-> Shortcuts, where it can be changed. Remove any
+Sc shortcut bound by hand earlier, otherwise the two clash.
+.TP
+.B Lightbar
+Off at boot until set, for example with \fBsudo recoil16ctl lightbar blue 60\fR;
+the setting is saved and applied at every boot.
+.TP
+.B Power modes
+The mode button next to the power button, the desktop power slider and
+\fBrecoil16ctl profile\fR all switch the same firmware mode:
+low-power (office, green), balanced (balance, blue), performance (turbo, purple).
+.SH FILES
+.TP
+.I /etc/udev/rules.d/90-recoil16-charge-limit.rules
+Re-applies the charge limit when the driver binds. Written by
+\fBrecoil16ctl battery limit\fR, removed by \fBrecoil16ctl battery clear-rule\fR.
+.TP
+.I /etc/modprobe.d/ite8233-lightbar.conf
+Lightbar colour and brightness at boot. Written by \fBrecoil16ctl lightbar\fR.
+.TP
+.I /usr/share/kglobalaccel/recoil16.desktop
+KDE default global shortcut: Sc runs \fBrecoil16ctl screen rotate\fR.
+.TP
+.I /usr/src/recoil16-VERSION/
+Module sources for DKMS.
+.SH REMOVAL
+With the Arch package: \fBsudo pacman \-R recoil16-dkms-git\fR, then reboot.
+With the install script: \fBsudo scripts/uninstall.sh\fR from the source tree,
+then reboot. Both reset the charge limit to 100% first, because the embedded
+controller would otherwise keep it with nothing left to change it.
+.SH TROUBLESHOOTING
+.TP
+DKMS build fails
+Install the headers for the running kernel; the build log is
+\fI/var/lib/dkms/recoil16/VERSION/build/make.log\fR.
+.TP
+"Missing VERSION kernel headers" from the DKMS pacman hook
+A leftover \fI/usr/lib/modules/VERSION\fR of a removed kernel. If
+\fBpacman \-Qo\fR says no package owns it, delete it.
+.TP
+Nothing works after boot
+\fBmodinfo \-F filename uniwill-laptop\fR shows the stock module instead of
+\fI.../updates/dkms/...\fR: run \fBsudo depmod \-a\fR and reboot.
+.TP
+recoil16ctl completion does not work in zsh
+The completion cache predates the install: \fBrm ~/.zcompdump*\fR and open a new shell.
+.TP
+KDE's power daemon crashed after loading the modules by hand
+PowerDevil 6.7 crashes on a keyboard brightness key if the backlight appeared
+after login: \fBsystemctl \-\-user restart plasma-powerdevil\fR.
+.TP
+copilot-rctrl: "cannot install i8042 filter"
+Another driver owns the i8042 filter; find it with \fBlsmod\fR and \fBdmesg\fR.
+.TP
+"permission denied ... run with sudo"
+Changing settings needs root; reading them does not.
+.TP
+"run 'recoil16ctl screen' as your desktop user"
+Screen rotation talks to the user's KDE session; run it without sudo.
+.SH SEE ALSO
+\fBrecoil16ctl\fR(1), \fBrecoil16ctl\-check\fR(1), \fBdkms\fR(8),
+\fBpowerprofilesctl\fR(1)
+.PP
+Source, installation on other distributions and upstream patches:
+\fIhttps://github.com/amad3v/recoil16\fR

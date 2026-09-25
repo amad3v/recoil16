@@ -1,0 +1,45 @@
+From 885f126c67a8aa9afe414f856019d6e8e68823c6 Mon Sep 17 00:00:00 2001
+From: amad3v <amad3v@gmail.com>
+Date: Fri, 25 Sep 2026 15:33:57 +0100
+Subject: [PATCH 3/3] platform/x86: uniwill-laptop: Map the screen rotation key
+
+The PCSpecialist Recoil 16 AMD / TUXEDO Stellaris 16 Gen7 chassis has an
+"Sc" key next to F12, meant to rotate the lay-flat screen by 180 degrees.
+It reports WMI event 0xD0, which is currently reported as KEY_UNKNOWN.
+Map it to KEY_ROTATE_DISPLAY.
+---
+ drivers/platform/x86/uniwill/uniwill-acpi.c | 3 +++
+ drivers/platform/x86/uniwill/uniwill-wmi.h  | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/drivers/platform/x86/uniwill/uniwill-acpi.c b/drivers/platform/x86/uniwill/uniwill-acpi.c
+index efdcc62..8c3694b 100644
+--- a/drivers/platform/x86/uniwill/uniwill-acpi.c
++++ b/drivers/platform/x86/uniwill/uniwill-acpi.c
+@@ -464,6 +464,9 @@ static const struct key_entry uniwill_keymap[] = {
+ 	/* Reported when the user wants to toggle the webcam */
+ 	{ KE_IGNORE,    UNIWILL_OSD_WEBCAM_TOGGLE,              { KEY_UNKNOWN }},
+ 
++	/* Reported when the user wants to rotate the (lay-flat) screen by 180 degrees */
++	{ KE_KEY,       UNIWILL_OSD_ROTATE_SCREEN,              { KEY_ROTATE_DISPLAY }},
++
+ 	{ KE_END }
+ };
+ 
+diff --git a/drivers/platform/x86/uniwill/uniwill-wmi.h b/drivers/platform/x86/uniwill/uniwill-wmi.h
+index fb1910c..35924a6 100644
+--- a/drivers/platform/x86/uniwill/uniwill-wmi.h
++++ b/drivers/platform/x86/uniwill/uniwill-wmi.h
+@@ -115,6 +115,9 @@
+ 
+ #define UNIWILL_OSD_WEBCAM_TOGGLE		0xCF
+ 
++/* "Sc" key next to F12 on the PCSpecialist Recoil 16 / Stellaris 16 Gen7 */
++#define UNIWILL_OSD_ROTATE_SCREEN		0xD0
++
+ #define UNIWILL_OSD_KBD_BACKLIGHT_CHANGED	0xF0
+ 
+ struct device;
+-- 
+2.55.0
+
