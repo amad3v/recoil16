@@ -3,3 +3,5 @@
 */pkg/
 recoil16-dkms-git/recoil16/
 recoil16-dkms/*.tar.gz
+.SRCINFO
+*.log

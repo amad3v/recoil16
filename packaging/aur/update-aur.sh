@@ -15,8 +15,14 @@ here=$(cd "$(dirname "$0")" && pwd)
 	exit 1
 }
 
-# -L: recoil16.install is a symlink in this repository, the AUR needs the file
-cp -L "$here/$pkg/PKGBUILD" "$here/$pkg/recoil16.install" "$dest/"
+# makepkg needs recoil16.install as a regular file next to each PKGBUILD, so
+# both packages carry a copy; they must stay identical
+cmp -s "$here/recoil16-dkms/recoil16.install" "$here/recoil16-dkms-git/recoil16.install" || {
+	echo "recoil16.install differs between recoil16-dkms and recoil16-dkms-git; sync them first" >&2
+	exit 1
+}
+
+cp "$here/$pkg/PKGBUILD" "$here/$pkg/recoil16.install" "$dest/"
 cd "$dest"
 
 if [ "$pkg" = recoil16-dkms-git ]; then
@@ -33,4 +39,4 @@ printf '*\n!PKGBUILD\n!recoil16.install\n!.SRCINFO\n!.gitignore\n' >.gitignore
 
 echo "== $pkg $(sed -n 's/^\tpkgver = //p' .SRCINFO)-$(sed -n 's/^\tpkgrel = //p' .SRCINFO)"
 git status --short
-echo "Review, then: git add PKGBUILD recoil16.install .SRCINFO .gitignore && git commit -m '...' && git push"
+echo "Review, then: git add PKGBUILD recoil16.install .SRCINFO .gitignore && git commit -m '...' && git push origin HEAD:master"

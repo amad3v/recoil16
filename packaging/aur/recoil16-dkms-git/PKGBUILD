@@ -3,7 +3,7 @@
 
 pkgname=recoil16-dkms-git
 _srcname=recoil16
-pkgver=1.0.0.r0.g0000000
+pkgver=1.0.0.r0.g95c5962
 pkgrel=1
 pkgdesc="Drivers and recoil16ctl for the PCSpecialist Recoil 16 AMD (TUXEDO Stellaris 16 Gen7): keyboard backlight, lightbar, power profiles, charge limit, Copilot key"
 arch=('x86_64')
