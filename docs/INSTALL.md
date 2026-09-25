@@ -34,22 +34,37 @@ If you already loaded the modules by hand (for example with
 
 ---
 
-## A. Arch package (recommended)
+## A. Arch Linux: AUR package (recommended)
+
+Two packages; install one:
+
+| Package | Builds |
+|---|---|
+| `recoil16-dkms` | The latest release (`v1.0.0`), checked against a pinned checksum |
+| `recoil16-dkms-git` | The latest commit on `main` |
+
+With an AUR helper:
 
 ```sh
-git clone https://github.com/amad3v/recoil16
-cd recoil16/packaging/arch
+paru -S recoil16-dkms          # or: yay -S recoil16-dkms
+```
+
+Without one:
+
+```sh
+git clone https://aur.archlinux.org/recoil16-dkms.git
+cd recoil16-dkms
 makepkg -si
 ```
 
-To build from a local checkout with unpushed commits:
+The same `PKGBUILD`s are in this repository under
+[`packaging/aur/`](../packaging/aur). To build a local checkout, including
+committed but unpushed changes:
 
 ```sh
-cd recoil16/packaging/arch
-RECOIL16_GIT="file://$(realpath ../..)" makepkg -si
+cd recoil16/packaging/aur/recoil16-dkms-git
+RECOIL16_GIT="file://$(realpath ../../..)" makepkg -si
 ```
-
-Only committed changes are built. Commit first.
 
 With a self-installed rustup, `makepkg -di` skips the build-dependency check
 and uses the `cargo` on your `PATH`. pacman still checks the runtime
@@ -59,10 +74,10 @@ dependencies when it installs the package.
 1. Installs the module sources to `/usr/src/recoil16-<version>/`. The DKMS
    pacman hook builds them for every installed kernel, and again after each
    kernel update.
-2. Builds and installs `recoil16ctl`, the control command, with bash, zsh
-   and fish completions.
-3. Installs the `recoil16ctl` man pages (`man recoil16ctl`) and shell
+2. Builds and installs `recoil16ctl`, the control command, with its man
+   pages (`man recoil16ctl`, `man recoil16`) and bash, zsh and fish
    completions.
+3. Installs the KDE default shortcut for the Sc key.
 
 **Then:**
 
@@ -74,7 +89,7 @@ sudo recoil16ctl battery limit 90     # optional; KDE/GNOME settings work too
 
 **Update:** `git pull`, then `makepkg -si` again, then reboot.
 
-**Remove:** `sudo pacman -R recoil16-dkms-git`, then reboot. Removing the
+**Remove:** `sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`), then reboot. Removing the
 package resets the charge limit to 100% and deletes its udev rule.
 
 ---

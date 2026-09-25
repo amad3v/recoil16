@@ -1,5 +1,5 @@
 # Maintainer: amad3v
-# Local build from a checkout:  RECOIL16_GIT=file://$PWD/../.. makepkg -si
+# Local build from a checkout:  RECOIL16_GIT=file://$PWD/../../.. makepkg -si
 
 pkgname=recoil16-dkms-git
 _srcname=recoil16

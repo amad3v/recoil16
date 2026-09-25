@@ -98,9 +98,8 @@ rebuilt automatically on kernel updates. See [docs/INSTALL.md](docs/INSTALL.md)
 for the full runbook. The short version:
 
 ```sh
-# Arch Linux package (recommended)
-git clone https://github.com/amad3v/recoil16
-cd recoil16/packaging/arch && makepkg -si
+# Arch Linux (AUR): latest release, or recoil16-dkms-git for the latest commit
+paru -S recoil16-dkms
 
 # or, on any distribution with DKMS
 cd recoil16 && sudo scripts/install.sh 90      # charge limit in percent
@@ -293,7 +292,7 @@ sensors | grep -A5 uniwill
 
 ## Uninstall
 
-`sudo pacman -R recoil16-dkms-git` (Arch package) or `sudo scripts/uninstall.sh`
+`sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`) for the Arch package, or `sudo scripts/uninstall.sh`
 (script install), then reboot. Both reset the charge limit to 100%, because
 the EC would otherwise keep it with nothing left to change it.
 
