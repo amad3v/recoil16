@@ -344,6 +344,8 @@
 #define UNIWILL_FEATURE_NVIDIA_CTGP_CONTROL	BIT(10)
 #define UNIWILL_FEATURE_USB_C_POWER_PRIORITY	BIT(11)
 #define UNIWILL_FEATURE_PERFORMANCE_MODES	BIT(12)
+/* EC battery data (learned capacity, cycles); ACPI _BIF hides it below 50 cycles */
+#define UNIWILL_FEATURE_BATTERY_INFO		BIT(13)
 
 enum usb_c_power_priority_options {
 	USB_C_POWER_PRIORITY_CHARGING = 0,
@@ -615,6 +617,12 @@ static bool uniwill_readable_reg(struct device *dev, unsigned int reg)
 	case EC_ADDR_CTGP_DB_TPP_OFFSET:
 	case EC_ADDR_CTGP_DB_DB_OFFSET:
 	case EC_ADDR_USB_C_POWER_PRIORITY:
+	case EC_ADDR_BAT_DESIGN_CAPACITY_1:
+	case EC_ADDR_BAT_DESIGN_CAPACITY_2:
+	case EC_ADDR_BAT_FULL_CAPACITY_1:
+	case EC_ADDR_BAT_FULL_CAPACITY_2:
+	case EC_ADDR_BAT_CYCLE_COUNT_1:
+	case EC_ADDR_BAT_CYCLE_COUNT_2:
 		return true;
 	default:
 		return false;
@@ -640,6 +648,12 @@ static bool uniwill_volatile_reg(struct device *dev, unsigned int reg)
 	case EC_ADDR_OEM_4:
 	case EC_ADDR_CHARGE_CTRL:
 	case EC_ADDR_USB_C_POWER_PRIORITY:
+	case EC_ADDR_BAT_DESIGN_CAPACITY_1:
+	case EC_ADDR_BAT_DESIGN_CAPACITY_2:
+	case EC_ADDR_BAT_FULL_CAPACITY_1:
+	case EC_ADDR_BAT_FULL_CAPACITY_2:
+	case EC_ADDR_BAT_CYCLE_COUNT_1:
+	case EC_ADDR_BAT_CYCLE_COUNT_2:
 		return true;
 	default:
 		return false;
@@ -658,6 +672,69 @@ static const struct regmap_config uniwill_ec_config = {
 	.use_single_read = true,
 	.use_single_write = true,
 };
+
+/* The EC updates 16-bit values byte by byte; re-read the high byte to catch a torn read. */
+static int uniwill_read_u16(struct uniwill_data *data, unsigned int reg_lo, unsigned int *val)
+{
+	unsigned int lo, hi, hi2;
+	int ret, i;
+
+	for (i = 0; i < 3; i++) {
+		ret = regmap_read(data->regmap, reg_lo + 1, &hi);
+		if (ret < 0)
+			return ret;
+
+		ret = regmap_read(data->regmap, reg_lo, &lo);
+		if (ret < 0)
+			return ret;
+
+		ret = regmap_read(data->regmap, reg_lo + 1, &hi2);
+		if (ret < 0)
+			return ret;
+
+		if (hi == hi2) {
+			*val = hi << 8 | lo;
+			return 0;
+		}
+	}
+
+	return -EIO;
+}
+
+static int uniwill_read_full_capacity(struct uniwill_data *data, unsigned int *full)
+{
+	int ret;
+
+	ret = uniwill_read_u16(data, EC_ADDR_BAT_FULL_CAPACITY_1, full);
+	if (ret < 0)
+		return ret;
+
+	if (!*full || *full == 0xFFFF)
+		return -ENODATA;
+
+	return 0;
+}
+
+static int uniwill_read_state_of_health(struct uniwill_data *data, int *soh)
+{
+	unsigned int design, full;
+	int ret;
+
+	ret = uniwill_read_u16(data, EC_ADDR_BAT_DESIGN_CAPACITY_1, &design);
+	if (ret < 0)
+		return ret;
+
+	if (!design || design == 0xFFFF)
+		return -ENODATA;
+
+	ret = uniwill_read_full_capacity(data, &full);
+	if (ret < 0)
+		return ret;
+
+	*soh = min(full * 100 / design, 100U);
+
+	return 0;
+}
 
 static int uniwill_write_fn_lock(struct uniwill_data *data, bool status)
 {
@@ -1096,6 +1173,39 @@ static int usb_c_power_priority_init(struct uniwill_data *data)
 	return 0;
 }
 
+static ssize_t battery_cycle_count_show(struct device *dev, struct device_attribute *attr,
+					char *buf)
+{
+	struct uniwill_data *data = dev_get_drvdata(dev);
+	unsigned int value;
+	int ret;
+
+	ret = uniwill_read_u16(data, EC_ADDR_BAT_CYCLE_COUNT_1, &value);
+	if (ret < 0)
+		return ret;
+
+	return sysfs_emit(buf, "%u\n", value);
+}
+
+static DEVICE_ATTR_RO(battery_cycle_count);
+
+static ssize_t battery_full_capacity_show(struct device *dev, struct device_attribute *attr,
+					  char *buf)
+{
+	struct uniwill_data *data = dev_get_drvdata(dev);
+	unsigned int full;
+	int ret;
+
+	ret = uniwill_read_full_capacity(data, &full);
+	if (ret < 0)
+		return ret;
+
+	/* EC reports mAh, power_supply uses µAh */
+	return sysfs_emit(buf, "%u\n", full * 1000);
+}
+
+static DEVICE_ATTR_RO(battery_full_capacity);
+
 static struct attribute *uniwill_attrs[] = {
 	/* Keyboard-related */
 	&dev_attr_fn_lock.attr,
@@ -1107,6 +1217,9 @@ static struct attribute *uniwill_attrs[] = {
 	/* Power-management-related */
 	&dev_attr_ctgp_offset.attr,
 	&dev_attr_usb_c_power_priority.attr,
+	/* Battery-related */
+	&dev_attr_battery_cycle_count.attr,
+	&dev_attr_battery_full_capacity.attr,
 	NULL
 };
 
@@ -1143,6 +1256,12 @@ static umode_t uniwill_attr_is_visible(struct kobject *kobj, struct attribute *a
 
 	if (attr == &dev_attr_usb_c_power_priority.attr) {
 		if (uniwill_device_supports(data, UNIWILL_FEATURE_USB_C_POWER_PRIORITY))
+			return attr->mode;
+	}
+
+	if (attr == &dev_attr_battery_cycle_count.attr ||
+	    attr == &dev_attr_battery_full_capacity.attr) {
+		if (uniwill_device_supports(data, UNIWILL_FEATURE_BATTERY_INFO))
 			return attr->mode;
 	}
 
@@ -1553,6 +1672,8 @@ static int uniwill_get_property(struct power_supply *psy, const struct power_sup
 		regval = FIELD_GET(CHARGE_CTRL_MASK, regval);
 		val->intval = uniwill_sanitize_battery_threshold(regval);
 		return 0;
+	case POWER_SUPPLY_PROP_STATE_OF_HEALTH:
+		return uniwill_read_state_of_health(data, &val->intval);
 	default:
 		return -EINVAL;
 	}
@@ -1659,6 +1780,56 @@ static const struct power_supply_ext uniwill_charge_modes_extension = {
 	.property_is_writeable = uniwill_property_is_writeable,
 };
 
+static const enum power_supply_property uniwill_charge_limit_info_properties[] = {
+	POWER_SUPPLY_PROP_HEALTH,
+	POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD,
+	POWER_SUPPLY_PROP_STATE_OF_HEALTH,
+};
+
+static const struct power_supply_ext uniwill_charge_limit_info_extension = {
+	.name = DRIVER_NAME,
+	.properties = uniwill_charge_limit_info_properties,
+	.num_properties = ARRAY_SIZE(uniwill_charge_limit_info_properties),
+	.get_property = uniwill_get_property,
+	.set_property = uniwill_set_property,
+	.property_is_writeable = uniwill_property_is_writeable,
+};
+
+static const enum power_supply_property uniwill_charge_modes_info_properties[] = {
+	POWER_SUPPLY_PROP_CHARGE_TYPES,
+	POWER_SUPPLY_PROP_HEALTH,
+	POWER_SUPPLY_PROP_STATE_OF_HEALTH,
+};
+
+static const struct power_supply_ext uniwill_charge_modes_info_extension = {
+	.name = DRIVER_NAME,
+	.charge_types = BIT(POWER_SUPPLY_CHARGE_TYPE_TRICKLE) |
+			BIT(POWER_SUPPLY_CHARGE_TYPE_STANDARD) |
+			BIT(POWER_SUPPLY_CHARGE_TYPE_LONGLIFE),
+	.properties = uniwill_charge_modes_info_properties,
+	.num_properties = ARRAY_SIZE(uniwill_charge_modes_info_properties),
+	.get_property = uniwill_get_property,
+	.set_property = uniwill_set_property,
+	.property_is_writeable = uniwill_property_is_writeable,
+};
+
+static const struct power_supply_ext *uniwill_battery_extension(struct uniwill_data *data)
+{
+	bool info = uniwill_device_supports(data, UNIWILL_FEATURE_BATTERY_INFO);
+
+	if (uniwill_device_supports(data, UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT)) {
+		if (info)
+			return &uniwill_charge_limit_info_extension;
+
+		return &uniwill_charge_limit_extension;
+	}
+
+	if (info)
+		return &uniwill_charge_modes_info_extension;
+
+	return &uniwill_charge_modes_extension;
+}
+
 static int uniwill_add_battery(struct power_supply *battery, struct acpi_battery_hook *hook)
 {
 	struct uniwill_data *data = container_of(hook, struct uniwill_data, hook);
@@ -1669,12 +1840,8 @@ static int uniwill_add_battery(struct power_supply *battery, struct acpi_battery
 	if (!entry)
 		return -ENOMEM;
 
-	if (uniwill_device_supports(data, UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT))
-		ret = power_supply_register_extension(battery, &uniwill_charge_limit_extension,
-						      data->dev, data);
-	else
-		ret = power_supply_register_extension(battery, &uniwill_charge_modes_extension,
-						      data->dev, data);
+	ret = power_supply_register_extension(battery, uniwill_battery_extension(data),
+					      data->dev, data);
 
 	if (ret < 0) {
 		kfree(entry);
@@ -1704,10 +1871,7 @@ static int uniwill_remove_battery(struct power_supply *battery, struct acpi_batt
 		}
 	}
 
-	if (uniwill_device_supports(data, UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT))
-		power_supply_unregister_extension(battery, &uniwill_charge_limit_extension);
-	else
-		power_supply_unregister_extension(battery, &uniwill_charge_modes_extension);
+	power_supply_unregister_extension(battery, uniwill_battery_extension(data));
 
 	return 0;
 }
@@ -2354,7 +2518,8 @@ static struct uniwill_device_descriptor tux_featureset_3_nvidia_descriptor __ini
 static struct uniwill_device_descriptor pcs_recoil16_amd_descriptor __initdata = {
 	.features = UNIWILL_FEATURE_FN_LOCK |
 		    UNIWILL_FEATURE_SUPER_KEY |
-		    UNIWILL_FEATURE_BATTERY_CHARGE_LIMIT |
+		    UNIWILL_FEATURE_BATTERY_CHARGE_MODES |
+		    UNIWILL_FEATURE_BATTERY_INFO |
 		    UNIWILL_FEATURE_CPU_TEMP |
 		    UNIWILL_FEATURE_GPU_TEMP |
 		    UNIWILL_FEATURE_PRIMARY_FAN |

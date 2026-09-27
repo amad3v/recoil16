@@ -1,13 +1,13 @@
 #!/bin/sh
 # Install the recoil16 modules via DKMS (rebuilt on kernel updates), recoil16ctl,
-# and a battery charge limit. Manual alternative to the Arch package.
+# and a battery charge mode. Manual alternative to the Arch package.
 # Needs cargo (Rust) to build recoil16ctl.
-# Usage: sudo scripts/install.sh [percent]   (default 90; 100 = no limit)
+# Usage: sudo scripts/install.sh [standard|long-life|trickle]   (default long-life, ~93%)
 set -e
 cd "$(dirname "$0")/.."
 . scripts/common.sh
 require_root
-LIMIT="${1:-90}"
+MODE="${1:-long-life}"
 command -v cargo >/dev/null || { echo "cargo not found: install Rust (e.g. pacman -S rust)" >&2; exit 1; }
 
 # build recoil16ctl as the invoking user so target/ is not owned by root;
@@ -33,7 +33,7 @@ modprobe -r $MODULES 2>/dev/null || true
 for m in $MODULES; do modprobe "$m"; done
 restart_powerdevil
 sleep 1
-/usr/local/bin/recoil16ctl battery limit "$LIMIT"
+/usr/local/bin/recoil16ctl battery mode "$MODE"
 
 echo
 for m in $MODULES; do echo "$m: $(modinfo -F filename "$m")"; done

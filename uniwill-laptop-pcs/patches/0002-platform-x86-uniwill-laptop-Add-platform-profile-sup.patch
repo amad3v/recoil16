@@ -1,7 +1,7 @@
-From 00ca921da50dbb7d6ff6ed52b3e6a5668f622154 Mon Sep 17 00:00:00 2001
-From: amad3v <amad3v@gmail.com>
-Date: Fri, 25 Sep 2026 15:33:57 +0100
-Subject: [PATCH 2/3] platform/x86: uniwill-laptop: Add platform profile
+From 325a333bae7b67ee692f1b14373d7a945d47824d Mon Sep 17 00:00:00 2001
+From: Mohamed Jouini <amad3v@gmail.com>
+Date: Sat, 26 Sep 2026 17:27:40 +0100
+Subject: [PATCH 2/4] platform/x86: uniwill-laptop: Add platform profile
  support
 
 The EC exposes the three firmware power modes (BIOS "office",
@@ -16,12 +16,14 @@ profiles and handle the mode key: the EC only cycles the
 mode itself until the OS sets one, afterwards it just reports
 UNIWILL_OSD_PERFORMANCE_MODE_TOGGLE, so notify userspace if the EC
 already switched and cycle the profile otherwise.
+
+Signed-off-by: Mohamed Jouini <amad3v@gmail.com>
 ---
  drivers/platform/x86/uniwill/uniwill-acpi.c | 133 +++++++++++++++++++-
  1 file changed, 132 insertions(+), 1 deletion(-)
 
 diff --git a/drivers/platform/x86/uniwill/uniwill-acpi.c b/drivers/platform/x86/uniwill/uniwill-acpi.c
-index 0493770..efdcc62 100644
+index 3898b70..5ec46e0 100644
 --- a/drivers/platform/x86/uniwill/uniwill-acpi.c
 +++ b/drivers/platform/x86/uniwill/uniwill-acpi.c
 @@ -39,6 +39,7 @@

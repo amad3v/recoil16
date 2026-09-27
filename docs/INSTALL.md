@@ -5,7 +5,7 @@ Three ways to install, all equivalent. Each one builds the same DKMS package,
 
 | Module | Purpose |
 |---|---|
-| `uniwill-laptop` | Fn keys, power profiles, charge limit, Sc key, sensors (replaces the stock module) |
+| `uniwill-laptop` | Fn keys, power profiles, charge modes, battery health, Sc key, sensors (replaces the stock module) |
 | `ite8291-mono` | Keyboard backlight |
 | `ite8233-lightbar` | Lightbar |
 | `copilot-rctrl` | Copilot key → Right Ctrl |
@@ -84,13 +84,13 @@ dependencies when it installs the package.
 ```sh
 sudo reboot
 recoil16ctl                           # status of everything
-sudo recoil16ctl battery limit 90     # optional; KDE/GNOME settings work too
+sudo recoil16ctl battery mode long-life   # optional: charge to ~93% (trickle: ~90%)
 ```
 
 **Update:** `git pull`, then `makepkg -si` again, then reboot.
 
 **Remove:** `sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`), then reboot. Removing the
-package resets the charge limit to 100% and deletes its udev rule.
+package deletes its charge-mode udev rule; the EC is back to Standard after the reboot.
 
 ---
 
@@ -99,7 +99,7 @@ package resets the charge limit to 100% and deletes its udev rule.
 ```sh
 git clone https://github.com/amad3v/recoil16
 cd recoil16
-sudo scripts/install.sh 90            # charge limit in percent; 100 = no limit
+sudo scripts/install.sh long-life     # charge mode: standard | long-life | trickle
 ```
 
 The script:
@@ -108,13 +108,13 @@ The script:
 3. Builds `recoil16ctl` with cargo, as your user, and installs it to
    `/usr/local/bin`.
 4. Loads the installed modules and restarts KDE's PowerDevil.
-5. Sets the charge limit.
+5. Sets the charge mode.
 
 A reboot is not required, but it's the best test that everything loads by
 itself.
 
-**Remove:** `sudo scripts/uninstall.sh`, then reboot. This also resets the
-charge limit to 100%.
+**Remove:** `sudo scripts/uninstall.sh`, then reboot. This also removes the
+charge-mode boot rule.
 
 ---
 
@@ -143,19 +143,18 @@ modinfo -F filename uniwill-laptop    # must be .../updates/dkms/uniwill-laptop.
 cargo build --release --locked --manifest-path recoil16ctl/Cargo.toml
 sudo install -m 755 recoil16ctl/target/release/recoil16ctl /usr/local/bin/recoil16ctl
 
-# 5. reboot, then set the charge limit
+# 5. reboot, then set the charge mode
 sudo reboot
-sudo recoil16ctl battery limit 90
+sudo recoil16ctl battery mode long-life
 ```
 
 **Remove:**
 
 ```sh
-echo 100 | sudo tee /sys/class/power_supply/BAT0/charge_control_end_threshold
 sudo dkms remove recoil16/$VER --all
 sudo rm -rf /usr/src/recoil16-$VER
 sudo rm -f /usr/local/bin/recoil16ctl /etc/modprobe.d/ite8233-lightbar.conf \
-           /etc/udev/rules.d/90-recoil16-charge-limit.rules
+           /etc/udev/rules.d/90-recoil16-charge-mode.rules
 sudo reboot
 ```
 
@@ -167,10 +166,12 @@ This section and the troubleshooting table are also installed as the
 `recoil16(7)` man page (`man recoil16`).
 
 
-1. **Charge limit:** set it in **System Settings → Power Management**, or
-   with `sudo recoil16ctl battery limit <percent>`. The EC remembers the
-   limit across reboots. The command also writes a udev rule that re-applies
-   the limit whenever the driver loads.
+1. **Charge mode:** `sudo recoil16ctl battery mode long-life` (about 93%) or
+   `trickle` (about 90%); `standard` charges fully. The EC still reports
+   100% / Full when a mode stops charging early. The command writes a udev
+   rule that re-applies the mode whenever the driver loads, because the EC
+   forgets it at shutdown. `recoil16ctl battery status` shows the battery's
+   real health and cycle count.
 2. **Sc key (KDE):** works after the next login. The install adds a
    default shortcut, listed as **Recoil 16 → Rotate Screen 180°** under
    System Settings → Keyboard → Shortcuts, where you can change it. If you
@@ -186,10 +187,11 @@ This section and the troubleshooting table are also installed as the
 recoil16ctl check
 ```
 
-It checks the kernel, the loaded modules, DKMS, the charge limit and its
-boot rule, the power profile and power-profiles-daemon, the keyboard,
-lightbar, Copilot filter, sensors and the KDE Sc shortcut. It prints one line
-per check (`ok`, `warn` or `FAIL`) and exits non-zero if anything failed.
+It checks the kernel, the loaded modules, DKMS, the charge mode and its
+boot rule (and a leftover 1.0.0 charge-limit rule), the power profile and
+power-profiles-daemon, the keyboard, lightbar, Copilot filter, sensors and
+the KDE Sc shortcut. It prints one line per check (`ok`, `warn` or `FAIL`)
+and exits non-zero if anything failed.
 Then it lists the checks that need a person: Fn keys, the mode button, Sc,
 Copilot, and suspend/resume.
 
@@ -206,6 +208,8 @@ the `uniwill-laptop` checks show as warnings, not failures.
 | Nothing works after boot | `modinfo -F filename uniwill-laptop` shows the stock module: run `sudo depmod -a` and reboot |
 | KDE's power daemon crashed after loading the modules by hand | Known PowerDevil 6.7 bug when the keyboard light appears after login: `systemctl --user restart plasma-powerdevil` |
 | `copilot-rctrl` doesn't load: "cannot install i8042 filter" | Another driver owns the i8042 filter: `lsmod`, then check `dmesg` for the owner |
-| Charge limit shows 100 after boot | `sudo recoil16ctl battery limit 90` writes the boot rule |
+| Charge mode is `Standard` after boot | `sudo recoil16ctl battery mode long-life` writes the boot rule |
+| Battery shows 100% / Full although a mode is set | Expected: the EC reports the lower voltage as full. `cat /sys/class/power_supply/BAT0/current_now` is 0 when charging stopped |
+| `check` warns about a leftover limit rule | From 1.0.0: `sudo recoil16ctl battery clear-rule`, then set a mode |
 | `recoil16ctl` says "permission denied … run with sudo" | Changing settings needs root; reading them (`recoil16ctl`, `recoil16ctl battery`) does not |
 | `recoil16ctl screen rotate` says "not with sudo" | Run it as your desktop user: it talks to your KDE session |

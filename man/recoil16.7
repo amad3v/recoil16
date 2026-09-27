@@ -7,7 +7,7 @@ The recoil16 package builds four kernel modules with DKMS and installs
 .TP
 .B uniwill-laptop
 Fn keys (keyboard backlight, Sc), firmware power modes as a platform profile,
-battery charge limit, Fn lock, Super-key lock, fan and temperature sensors.
+battery charge modes and health, Fn lock, Super-key lock, fan and temperature sensors.
 Replaces the stock module; needs kernel 7.2 or newer.
 .TP
 .B ite8291-mono
@@ -25,16 +25,22 @@ On kernels older than 7.2 (for example a 6.18 LTS fallback) only
 .TP
 .B Check
 Run \fBrecoil16ctl check\fR after installing, after upgrades and after kernel
-updates. It checks the kernel, modules, DKMS, charge limit, power profile,
+updates. It checks the kernel, modules, DKMS, charge mode, power profile,
 keyboard, lightbar, Copilot filter, sensors and the Sc shortcut, and lists the
 checks that need a person.
 .TP
-.B Charge limit
-Set it in the desktop's power settings, or with
-\fBsudo recoil16ctl battery limit\fR \fIpercent\fR. The embedded controller
-keeps the limit across reboots, charger changes and suspend; the command also
-writes a udev rule that re-applies it whenever the driver loads. While the
-battery is held at the limit its status reads "Not charging".
+.B Charge mode
+\fBsudo recoil16ctl battery mode\fR \fBstandard\fR|\fBlong-life\fR|\fBtrickle\fR
+charges fully, to about 93% or to about 90%. The embedded controller lowers
+the charge voltage and still reports 100% / Full. It forgets the mode at
+shutdown, so the command also writes a udev rule that re-applies it whenever
+the driver loads. The 1.0.0 percentage limit was removed: it may damage the
+battery on this model.
+.TP
+.B Battery health
+\fBrecoil16ctl battery status\fR shows the learned battery health and cycle
+count read from the embedded controller; the firmware reports design capacity
+and 0 cycles to the OS until 50 cycles.
 .TP
 .B Sc key (KDE Plasma)
 Rotates the screen 180\(de from the first login after installing. The default
@@ -52,9 +58,10 @@ The mode button next to the power button, the desktop power slider and
 low-power (office, green), balanced (balance, blue), performance (turbo, purple).
 .SH FILES
 .TP
-.I /etc/udev/rules.d/90-recoil16-charge-limit.rules
-Re-applies the charge limit when the driver binds. Written by
-\fBrecoil16ctl battery limit\fR, removed by \fBrecoil16ctl battery clear-rule\fR.
+.I /etc/udev/rules.d/90-recoil16-charge-mode.rules
+Re-applies the charge mode when the driver binds. Written by
+\fBrecoil16ctl battery mode\fR, removed by \fBrecoil16ctl battery clear-rule\fR
+(which also removes a 1.0.0 \fI90-recoil16-charge-limit.rules\fR).
 .TP
 .I /etc/modprobe.d/ite8233-lightbar.conf
 Lightbar colour and brightness at boot. Written by \fBrecoil16ctl lightbar\fR.
@@ -67,8 +74,8 @@ Module sources for DKMS.
 .SH REMOVAL
 With the Arch package: \fBsudo pacman \-R recoil16-dkms\fR (or \fBrecoil16-dkms-git\fR), then reboot.
 With the install script: \fBsudo scripts/uninstall.sh\fR from the source tree,
-then reboot. Both reset the charge limit to 100% first, because the embedded
-controller would otherwise keep it with nothing left to change it.
+then reboot. Both remove the charge-mode boot rule; the embedded controller
+is back to Standard after the reboot.
 .SH TROUBLESHOOTING
 .TP
 DKMS build fails

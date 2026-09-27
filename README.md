@@ -11,7 +11,7 @@ Linux kernel drivers for the **PCSpecialist Recoil 16 AMD**, a rebadged
 | Sc key (next to F12): rotate the screen 180°                               | `uniwill-laptop` + `recoil16ctl screen rotate` | `KEY_ROTATE_DISPLAY`                                        |
 | Copilot key back to Right Ctrl                                             | `copilot-rctrl`                                | built-in keyboard (no virtual device)                       |
 | Power modes (office / balance / turbo) with mode button and desktop slider | `uniwill-laptop`                               | `/sys/firmware/acpi/platform_profile`                       |
-| Battery charge limit (any %, KDE/GNOME slider)                             | `uniwill-laptop`                               | `/sys/class/power_supply/BAT0/charge_control_end_threshold` |
+| Battery charge modes (full / ~93% / ~90%), true battery health            | `uniwill-laptop`                               | `/sys/class/power_supply/BAT0/charge_types`                 |
 | Fn lock, Super key lock, fan/temperature sensors, NVIDIA cTGP              | `uniwill-laptop`                               | `/sys/bus/platform/devices/INOU0000:00/`                    |
 
 All of it can be controlled with **`recoil16ctl`** (see [below](#recoil16ctl)).
@@ -30,13 +30,15 @@ desktop can control it.
 ## How it works
 
 - **`uniwill-laptop-pcs/`**: the mainline
-  `drivers/platform/x86/uniwill` driver (v7.2) with three changes, all in
+  `drivers/platform/x86/uniwill` driver (v7.2) with four changes, all in
   [`patches/`](uniwill-laptop-pcs/patches) as an upstream-style series:
   1. a DMI entry for the Recoil 16 (the Stellaris 16 Gen7 AMD feature set,
-     using the percentage charge limit);
+     with its charge modes);
   2. `platform_profile` support for the firmware power modes, including the
-     mode button;
-  3. the Sc key (WMI event `0xd0`) mapped to `KEY_ROTATE_DISPLAY`.
+     mode button (**experimental**: not upstream, see [Power modes](#power-modes));
+  3. the Sc key (WMI event `0xd0`) mapped to `KEY_ROTATE_DISPLAY`;
+  4. the battery's learned capacity and cycle count from the EC
+     (`state_of_health`, `battery_cycle_count`, `battery_full_capacity`).
 
   As with any DKMS module that shares a name with an in-tree one, DKMS moves
   the stock `uniwill-laptop.ko` to `/var/lib/dkms/recoil16/original_module/`
@@ -69,7 +71,7 @@ desktop-specific code is involved.
 - Kernel 7.2 or newer for everything. `uniwill-laptop` tracks the 7.2 stable
   branch and needs 7.2 APIs. On older kernels (e.g. 6.18 LTS), DKMS builds only
   the keyboard backlight, lightbar and Copilot modules. The Fn keys, power
-  profiles, charge limit and Sc key need `uniwill-laptop`.
+  profiles, charge modes and Sc key need `uniwill-laptop`.
 - Kernel headers and `dkms` (Arch: `pacman -S linux-headers dkms`)
 
 ## Kernel updates
@@ -102,7 +104,7 @@ for the full runbook. The short version:
 paru -S recoil16-dkms
 
 # or, on any distribution with DKMS
-cd recoil16 && sudo scripts/install.sh 90      # charge limit in percent
+cd recoil16 && sudo scripts/install.sh long-life   # charge mode: standard | long-life | trickle
 ```
 
 Then reboot and run `recoil16ctl check`.
@@ -113,32 +115,55 @@ To try the modules for the current boot only, without installing anything:
 sudo scripts/load-test.sh
 ```
 
-## Battery charge limit
+## Battery charge modes
 
-The EC has a percentage charge limit (register `0x07B9`, called `CGLM` in the
-ACPI tables). It's exposed as the standard `charge_control_end_threshold`
-attribute, so KDE's and GNOME's charge-limit settings work with it directly.
+The EC has three charge modes. Instead of stopping at a percentage, each
+one lowers the voltage the battery is charged to, which is what actually
+slows battery wear. They're exposed as the standard `charge_types`
+attribute:
+
+| Mode        | `charge_types` | Charges to               | Share of a full charge |
+| ----------- | -------------- | ------------------------ | ---------------------- |
+| `standard`  | `Standard`     | 4.35 V per cell (17.4 V) | 100%                   |
+| `long-life` | `Long_Life`    | 4.30 V per cell (17.2 V) | about 93%              |
+| `trickle`   | `Trickle`      | 4.20 V per cell (16.8 V) | about 90%              |
+
+Measured on the Recoil 16's 99 Wh battery (not the "~90% / ~80%" often quoted for
+these modes). The lower voltage is what slows battery wear: `trickle` keeps the cells
+0.15 V below full charge for about 10% less capacity.
 
 ```sh
-cat /sys/class/power_supply/BAT0/charge_control_end_threshold
-sudo recoil16ctl battery limit 80            # now and at every boot; 100 = no limit
-sudo recoil16ctl battery limit 80 --temp     # this boot only
+cat /sys/class/power_supply/BAT0/charge_types
+sudo recoil16ctl battery mode long-life         # now and at every boot
+sudo recoil16ctl battery mode trickle --temp    # this boot only
 ```
 
-While the limit is holding the battery, `status` reads `Not charging`. The
-firmware sets the ACPI "charge limiting" flag for this. If the battery is
-already above the limit, it drains to the limit before charging again.
+The EC still reports **100% / Full** when a mode stops charging early: the
+battery is "full" at the lower voltage. `current_now` drops to 0 when
+charging stops. The EC forgets the mode when the driver releases control at
+shutdown, so `recoil16ctl battery mode` also writes a udev rule that
+re-applies it whenever the driver loads.
 
-The EC keeps the limit across reboots (tested on the Recoil 16), so a limit set
-in KDE's or GNOME's settings persists. `recoil16ctl battery limit` also writes a
-udev rule that re-applies the limit whenever the driver loads, in case the EC
-ever loses it.
+`recoil16ctl battery status` shows the battery's real health and cycle count. The
+firmware reports the design capacity as "full" and 0 cycles to the OS until the
+battery has done 50 cycles, so `charge_full` and `cycle_count` in sysfs (and
+tools that read them) always show 100% and 0. The driver reads the learned
+values from the embedded controller instead (`state_of_health`,
+`battery_cycle_count`, `battery_full_capacity`).
 
-The EC also has three "charging profiles" (`high_capacity`, `balanced`,
-`stationary`), which TUXEDO uses on the Stellaris 16 Gen7. On the Recoil 16
-firmware, `balanced` did **not** stop charging: the battery reached a real
-100% with the same voltage as under `Standard`. This driver doesn't expose the
-profiles.
+### Why there's no percentage limit any more
+
+1.0.0 used the EC's percentage limit (register `0x07B9`, `CGLM`). The driver's
+maintainer warned that Uniwill treats it as a preview feature on models other
+than Intel NUCs, and that it may permanently damage the battery. There is at
+least one such report
+([r/XMG_gg](https://www.reddit.com/r/XMG_gg/comments/ld9yyf/battery_limit_hidden_function_discovered_on/)).
+1.1.0 removes it. The EC resets the register by itself at power-off, so there
+is nothing to undo.
+
+**Upgrading from 1.0.0:** the package removes the old limit rule. Choose a mode
+with `sudo recoil16ctl battery mode long-life` (or `trickle`), and run
+`recoil16ctl check`.
 
 ## Power modes
 
@@ -157,6 +182,10 @@ The mode button cycles `low-power → balanced → performance`, and the desktop
 slider follows it. A mode set from the desktop takes effect in the embedded
 controller straight away: it changes the light colour and the GPU power
 limits itself.
+
+This part is **experimental and not upstream**: the driver's maintainer wants
+the fan control and platform profile support to get more work before it's
+enabled in mainline, so it only exists in this package for now.
 
 ```sh
 cat /sys/firmware/acpi/platform_profile
@@ -218,9 +247,10 @@ which must run as your desktop user.
 ```sh
 recoil16ctl                                # status: battery, profile, keyboard, lightbar, fans
 recoil16ctl check                          # verify the installation (alias: verify)
-recoil16ctl battery                        # charge, voltage, limit, boot rule
-sudo recoil16ctl battery limit 80 [--temp] # charge limit; saved for boot unless --temp
-sudo recoil16ctl battery clear-rule        # drop the boot rule (the EC keeps its limit)
+recoil16ctl battery                        # charge, voltage, charge mode, boot rule
+recoil16ctl battery status                 # true health, cycles, charge mode (from the EC)
+sudo recoil16ctl battery mode long-life [--temp] # standard | long-life | trickle; saved for boot unless --temp
+sudo recoil16ctl battery clear-rule        # drop the boot rule (Standard from the next boot)
 sudo recoil16ctl lightbar blue 60 [--temp] # see Lightbar
 sudo recoil16ctl profile performance       # low-power | balanced | performance | cycle
 recoil16ctl keyboard                       # backlight level, Fn lock, Super key
@@ -293,8 +323,8 @@ sensors | grep -A5 uniwill
 ## Uninstall
 
 `sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`) for the Arch package, or `sudo scripts/uninstall.sh`
-(script install), then reboot. Both reset the charge limit to 100%, because
-the EC would otherwise keep it with nothing left to change it.
+(script install), then reboot. Both remove the charge-mode boot rule; the
+EC is back to Standard after the reboot.
 
 ## Tested on
 
