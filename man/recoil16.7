@@ -30,7 +30,9 @@ On kernels older than 7.2 (for example a 6.18 LTS fallback) only
 Run \fBrecoil16ctl check\fR after installing, after upgrades and after kernel
 updates. It checks the kernel, modules, DKMS, charge mode, power profile,
 keyboard, lightbar, Copilot filter, sensors and the Sc shortcut, and lists the
-checks that need a person.
+checks that need a person. Its Power group checks what keeps the NVIDIA GPU and
+the rest of the laptop from idling (runtime power management, driver settings,
+the AMD Vulkan driver); those items only warn.
 .TP
 .B Charge mode
 \fBsudo recoil16ctl battery mode\fR \fBstandard\fR|\fBlong-life\fR|\fBtrickle\fR
@@ -105,6 +107,10 @@ Another driver owns the i8042 filter; find it with \fBlsmod\fR and \fBdmesg\fR.
 .TP
 "permission denied ... run with sudo"
 Changing settings needs root; reading them does not.
+.TP
+NVIDIA GPU never suspends
+Run \fBrecoil16ctl check\fR (Power group) and see the README section
+"Power on the hybrid GPU".
 .TP
 "run 'recoil16ctl screen' as your desktop user"
 Screen rotation talks to the user's KDE session; run it without sudo.
