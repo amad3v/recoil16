@@ -12,8 +12,9 @@ Replaces the stock module; needs kernel 7.2 or newer.
 .TP
 .B ite8291-mono
 Keyboard backlight (white, 0\-50), as \fI/sys/class/leds/ite8291:white:kbd_backlight\fR.
-Fn+F6/Fn+F7 are handled by the driver, so they work without a desktop
-(module parameter \fBkey_step\fR, 0 leaves them to the desktop).
+Fn+F6/Fn+F7 are handled by the desktop by default; module parameter
+\fBkey_step\fR=10 lets the driver handle them, also without a desktop
+(needs a UPower newer than 1.91.4 for the desktop to follow).
 .TP
 .B ite8233-lightbar
 RGB lightbar, as \fI/sys/class/leds/rgb:lightbar\fR.

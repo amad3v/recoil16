@@ -67,9 +67,15 @@ static int default_brightness = ITE8291_MAX_BRIGHTNESS / 2;
 module_param(default_brightness, int, 0444);
 MODULE_PARM_DESC(default_brightness, "Brightness applied at probe, 0-50 (systemd-backlight restores the saved value afterwards)");
 
-static int key_step = 10;
+/*
+ * Off by default: with key handling on, desktops learn about the change through
+ * UPower watching brightness_hw_changed, and UPower 1.91.4 drops that watch at
+ * startup (fixed upstream in ce25d69f, "Keep event IO active on ENODATA/EINTR").
+ * Until a fixed UPower is common, the keys stay with the desktop unless asked.
+ */
+static int key_step;
 module_param(key_step, int, 0444);
-MODULE_PARM_DESC(key_step, "Brightness step for Fn+F6/F7, 0-50 (0 = leave the keys to userspace)");
+MODULE_PARM_DESC(key_step, "Brightness step for Fn+F6/F7, 0-50 (default 0: leave the keys to userspace)");
 
 /* ========================================================================== */
 
@@ -493,7 +499,9 @@ static int ite8291_probe(struct hid_device *hdev, const struct hid_device_id *id
 	p->led.max_brightness = ITE8291_MAX_BRIGHTNESS;
 	p->led.brightness = p->brightness;
 	p->led.brightness_set_blocking = ite8291_led_set;
-	p->led.flags = LED_CORE_SUSPENDRESUME | LED_RETAIN_AT_SHUTDOWN | LED_BRIGHT_HW_CHANGED;
+	p->led.flags = LED_CORE_SUSPENDRESUME | LED_RETAIN_AT_SHUTDOWN;
+	if (key_step > 0)	/* only key presses are hardware changes */
+		p->led.flags |= LED_BRIGHT_HW_CHANGED;
 
 	err = led_classdev_register(&hdev->dev, &p->led);
 	if (err)

@@ -209,18 +209,26 @@ cat $L/max_brightness             # 50
 echo 30 | sudo tee $L/brightness
 ```
 
-**Fn+F6 / Fn+F7 are handled by the driver**, not by the desktop, so they work
-everywhere: at the login screen, on the lock screen, in any desktop and on a
-text console. Each press steps the brightness by `key_step` (10 of 50). The
-change is reported as a hardware change (`brightness_hw_changed`): UPower
-passes it on, and KDE Plasma shows its brightness indicator and moves the
-slider, in the session and on the lock screen. At the login screen there is no
-desktop to show one, but the keys still work. Writing `brightness` directly
-works too, but the desktop only catches up at the next key press.
+Fn+F6 / Fn+F7 only report key presses: the embedded controller doesn't change
+this keyboard's light itself. **By default the desktop handles them** (KDE's
+PowerDevil, GNOME's settings daemon, …), so they work in a desktop session and
+on its lock screen, but not at the login screen or on a text console.
 
-If `ite8291-mono` is reloaded while the system runs, restart UPower (or
-reboot) so it picks up the new LED; until then the desktop doesn't see the
-key changes.
+**Optional: let the driver handle them** with `key_step=10` (see below). Then
+the keys work everywhere, including the login screen and text consoles: the
+driver takes the two keys before any desktop sees them, steps the brightness
+itself and reports it as a hardware change (`brightness_hw_changed`), which
+UPower passes on to the desktop (tested: KDE Plasma shows its indicator and
+moves the slider).
+
+**Known issue with UPower 1.91.4** (the version in Arch as of 2026-09-27): it
+stops watching `brightness_hw_changed` at startup, so with `key_step` set the
+desktop doesn't see the key changes (no indicator, and the slider stays where
+it was, which can also make the desktop restore a wrong brightness after
+idling). This is fixed upstream (UPower commit `ce25d69f`, not yet released),
+and that's why the option is off by default.
+
+Writing `brightness` directly works too, but the desktop isn't told about it.
 
 Module parameters (e.g. in `/etc/modprobe.d/ite8291-mono.conf`):
 
@@ -228,10 +236,11 @@ Module parameters (e.g. in `/etc/modprobe.d/ite8291-mono.conf`):
 | ---------------------------------------- | ---------- | ------------------------------------------------------------------------ |
 | `red_scale`, `green_scale`, `blue_scale` | auto (DMI) | White balance, 0-255 per channel                                         |
 | `default_brightness`                     | 25         | Brightness at probe, before `systemd-backlight` restores the saved value |
-| `key_step`                               | 10         | Brightness step for Fn+F6/F7, 0-50; 0 leaves the keys to the desktop     |
+| `key_step`                               | 0          | Brightness step for Fn+F6/F7, 0-50; 0 leaves the keys to the desktop     |
 
 ```
 options ite8291-mono red_scale=160 blue_scale=120
+options ite8291-mono key_step=10      # Fn+F6/F7 handled by the driver (see above)
 ```
 
 ## Lightbar
