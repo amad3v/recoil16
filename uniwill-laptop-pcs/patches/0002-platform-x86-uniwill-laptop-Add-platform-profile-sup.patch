@@ -1,4 +1,4 @@
-From 325a333bae7b67ee692f1b14373d7a945d47824d Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Mohamed Jouini <amad3v@gmail.com>
 Date: Sat, 26 Sep 2026 17:27:40 +0100
 Subject: [PATCH 2/4] platform/x86: uniwill-laptop: Add platform profile

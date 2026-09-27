@@ -1,4 +1,4 @@
-From 98197bf33eca86b0c88ee85d5761e26a06d9f6c4 Mon Sep 17 00:00:00 2001
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Mohamed Jouini <amad3v@gmail.com>
 Date: Sat, 26 Sep 2026 17:27:40 +0100
 Subject: [PATCH 3/4] platform/x86: uniwill-laptop: Map the screen rotation key

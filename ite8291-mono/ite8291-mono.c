@@ -13,14 +13,18 @@
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/atomic.h>
 #include <linux/dmi.h>
 #include <linux/hid.h>
+#include <linux/input.h>
 #include <linux/jiffies.h>
 #include <linux/leds.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
 #include <linux/timer.h>
 #include <linux/usb.h>
+#include <linux/workqueue.h>
 
 /* ========================================================================== */
 
@@ -63,6 +67,10 @@ static int default_brightness = ITE8291_MAX_BRIGHTNESS / 2;
 module_param(default_brightness, int, 0444);
 MODULE_PARM_DESC(default_brightness, "Brightness applied at probe, 0-50 (systemd-backlight restores the saved value afterwards)");
 
+static int key_step = 10;
+module_param(key_step, int, 0444);
+MODULE_PARM_DESC(key_step, "Brightness step for Fn+F6/F7, 0-50 (0 = leave the keys to userspace)");
+
 /* ========================================================================== */
 
 struct ite8291_white {
@@ -104,6 +112,12 @@ struct ite8291_priv {
 	struct ite8291_white white;
 	u8 brightness;	/* last requested, 0 = off */
 	bool lit;	/* user mode + colour rows written since last off/reset */
+
+	/* Fn+F6/F7 from the Uniwill hotkey device, handled here (see ite8291_keys_*) */
+	struct input_handler keys;
+	struct work_struct key_work;
+	atomic_t key_steps;	/* pending steps, + up / - down */
+	bool keys_registered;
 
 	struct mutex lock; /* protects everything below hdev */
 
@@ -268,6 +282,138 @@ static int ite8291_led_set(struct led_classdev *led_cdev, enum led_brightness va
 
 /* ========================================================================== */
 
+/* ========================================================================== */
+
+/*
+ * The EC only reports Fn+F6/F7 (KEY_KBDILLUMDOWN/UP from uniwill-laptop); it does
+ * not change this USB controller. Handle the keys here, like firmware would, so
+ * they work without a desktop (login screen, console), and swallow them so no
+ * desktop steps the brightness a second time. The change is reported as a
+ * hardware change, so UPower and the desktop follow it.
+ */
+#define ITE8291_HOTKEY_DEVICE	"Uniwill WMI hotkeys"
+
+static void ite8291_key_work(struct work_struct *work)
+{
+	struct ite8291_priv *p = container_of(work, struct ite8291_priv, key_work);
+	int steps = atomic_xchg(&p->key_steps, 0);
+	int value;
+
+	if (!steps)
+		return;
+
+	value = clamp_t(int, p->led.brightness + steps * key_step, 0, ITE8291_MAX_BRIGHTNESS);
+	if (led_set_brightness_sync(&p->led, value))
+		return;
+
+	led_classdev_notify_brightness_hw_changed(&p->led, value);
+}
+
+static bool ite8291_keys_filter(struct input_handle *handle, unsigned int type,
+				unsigned int code, int value)
+{
+	struct ite8291_priv *p = handle->private;
+
+	if (type != EV_KEY || (code != KEY_KBDILLUMUP && code != KEY_KBDILLUMDOWN))
+		return false;
+
+	if (value) {	/* press or autorepeat; release is only swallowed */
+		atomic_add(code == KEY_KBDILLUMUP ? 1 : -1, &p->key_steps);
+		schedule_work(&p->key_work);
+	}
+
+	return true;
+}
+
+static bool ite8291_keys_match(struct input_handler *handler, struct input_dev *dev)
+{
+	return dev->name && !strcmp(dev->name, ITE8291_HOTKEY_DEVICE);
+}
+
+static int ite8291_keys_connect(struct input_handler *handler, struct input_dev *dev,
+				const struct input_device_id *id)
+{
+	struct input_handle *handle;
+	int err;
+
+	handle = kzalloc_obj(*handle);
+	if (!handle)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = "ite8291-mono";
+	handle->private = container_of(handler, struct ite8291_priv, keys);
+
+	err = input_register_handle(handle);
+	if (err)
+		goto err_free;
+
+	err = input_open_device(handle);
+	if (err)
+		goto err_unregister;
+
+	return 0;
+
+err_unregister:
+	input_unregister_handle(handle);
+err_free:
+	kfree(handle);
+	return err;
+}
+
+static void ite8291_keys_disconnect(struct input_handle *handle)
+{
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
+}
+
+static const struct input_device_id ite8291_keys_ids[] = {
+	{
+		.flags = INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
+		.evbit = { BIT_MASK(EV_KEY) },
+		.keybit = { [BIT_WORD(KEY_KBDILLUMUP)] = BIT_MASK(KEY_KBDILLUMUP) },
+	},
+	{ }
+};
+
+static int ite8291_keys_register(struct ite8291_priv *p)
+{
+	int err;
+
+	if (key_step <= 0)
+		return 0;
+
+	key_step = min(key_step, ITE8291_MAX_BRIGHTNESS);
+	INIT_WORK(&p->key_work, ite8291_key_work);
+	atomic_set(&p->key_steps, 0);
+
+	p->keys.filter = ite8291_keys_filter;
+	p->keys.match = ite8291_keys_match;
+	p->keys.connect = ite8291_keys_connect;
+	p->keys.disconnect = ite8291_keys_disconnect;
+	p->keys.name = "ite8291-mono";
+	p->keys.id_table = ite8291_keys_ids;
+
+	err = input_register_handler(&p->keys);
+	if (err)
+		return err;
+
+	p->keys_registered = true;
+	return 0;
+}
+
+static void ite8291_keys_unregister(struct ite8291_priv *p)
+{
+	if (!p->keys_registered)
+		return;
+
+	input_unregister_handler(&p->keys);
+	cancel_work_sync(&p->key_work);
+	p->keys_registered = false;
+}
+
 static void ite8291_pick_white(struct ite8291_priv *p)
 {
 	const struct dmi_system_id *id = dmi_first_match(ite8291_white_table);
@@ -347,11 +493,15 @@ static int ite8291_probe(struct hid_device *hdev, const struct hid_device_id *id
 	p->led.max_brightness = ITE8291_MAX_BRIGHTNESS;
 	p->led.brightness = p->brightness;
 	p->led.brightness_set_blocking = ite8291_led_set;
-	p->led.flags = LED_CORE_SUSPENDRESUME | LED_RETAIN_AT_SHUTDOWN;
+	p->led.flags = LED_CORE_SUSPENDRESUME | LED_RETAIN_AT_SHUTDOWN | LED_BRIGHT_HW_CHANGED;
 
 	err = led_classdev_register(&hdev->dev, &p->led);
 	if (err)
 		goto err_close;
+
+	err = ite8291_keys_register(p);
+	if (err)	/* the backlight works without them */
+		hid_warn(hdev, "Fn+F6/F7 not handled: %d\n", err);
 
 	return 0;
 
@@ -369,6 +519,7 @@ static void ite8291_remove(struct hid_device *hdev)
 {
 	struct ite8291_priv *p = hid_get_drvdata(hdev);
 
+	ite8291_keys_unregister(p);
 	led_classdev_unregister(&p->led);
 	timer_delete_sync(&p->put_timer);
 	if (p->intf_gotten)
