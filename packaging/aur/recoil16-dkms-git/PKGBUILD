@@ -16,6 +16,8 @@ optdepends=('linux-headers: build the modules for the linux kernel'
 provides=('recoil16-dkms')
 conflicts=('recoil16-dkms')
 install=recoil16.install
+# recoil16ctl is built stripped (Cargo.toml profile), so a -debug package would be empty
+options=('!debug')
 source=("$_srcname::git+${RECOIL16_GIT:-https://github.com/amad3v/recoil16.git}")
 sha256sums=('SKIP')
 
