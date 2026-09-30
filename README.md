@@ -16,6 +16,15 @@ Linux kernel drivers for the **PCSpecialist Recoil 16 AMD**, a rebadged
 
 All of it can be controlled with **`recoil16ctl`** (see [below](#recoil16ctl)).
 
+> [!WARNING]
+> **Use at your own risk.** Everything in this README was thoroughly tested,
+> physically, on a PCSpecialist Recoil 16 AMD (see
+> [Tested on](#tested-on)). Nothing was tested on other models, including the
+> TUXEDO Stellaris 16 Gen7 it is based on. These drivers talk to the laptop's
+> embedded controller and change how the battery charges. The author takes no
+> responsibility for any damage to your laptop, its battery or your data. The
+> software comes with no warranty (GPL-2.0, sections 11 and 12).
+
 ## Why this is needed
 
 Mainline Linux already ships `uniwill-laptop` with support for the Stellaris 16
@@ -331,7 +340,7 @@ the charge-mode boot rule, and the EC is back to Standard after the reboot.
 
 | Model                      | DMI board  | BIOS        | Kernel        |
 | -------------------------- | ---------- | ----------- | ------------- |
-| PCSpecialist Recoil 16 AMD | `X6FR57TY` | N.1.39PCS10 | 7.2.6-arch2-1 |
+| PCSpecialist Recoil 16 AMD | `X6FR57TY` | N.1.39PCS10 | 7.2.7-arch1-1 |
 
 Other ITE 8291 rev 0.03 keyboards (`048d:6004/6006/600b/ce00`) should work
 with `ite8291-mono` too. Unlisted boards get tuxedo-drivers' default white
