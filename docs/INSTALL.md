@@ -15,14 +15,8 @@ After installing, run `recoil16ctl check` (see [Verify](#verify)).
 ## Prerequisites
 
 ```sh
-sudo pacman -S --needed base-devel git dkms linux-headers rust
+sudo pacman -S --needed base-devel git dkms linux-headers
 ```
-
-**Rust:** either Arch's `rust` package, or rustup. If you installed rustup
-yourself (in `~/.cargo/bin`), `makepkg -s` asks which package provides
-`cargo`: choose `rustup`. It uses your existing `~/.rustup` toolchains and
-needs a `stable` toolchain (`rustup toolchain install stable`). You can also
-skip the question with `makepkg -di` (see below).
 
 Use the headers package that matches your kernel (`linux-lts-headers`,
 `linux-zen-headers`, …). `uniwill-laptop` needs kernel 7.2 or newer; on older
@@ -36,17 +30,19 @@ If you already loaded the modules by hand (for example with
 
 ## A. Arch Linux: AUR package (recommended)
 
-Two packages; install one:
+Two package pairs; install one drivers package and one `recoil16ctl` package:
 
 | Package | Builds |
 |---|---|
-| `recoil16-dkms` | The latest release (`v1.0.0`), checked against a pinned checksum |
+| `recoil16-dkms` | The latest `vX.Y.Z` tag, checked against a pinned checksum |
 | `recoil16-dkms-git` | The latest commit on `main` |
+| `recoil16ctl` | The latest `vX.Y.Z` tag of [amad3v/recoil16ctl](https://github.com/amad3v/recoil16ctl) |
+| `recoil16ctl-git` | The latest commit on `main` of recoil16ctl |
 
 With an AUR helper:
 
 ```sh
-paru -S recoil16-dkms          # or: yay -S recoil16-dkms
+yay -S recoil16-dkms recoil16ctl          # or: paru -S recoil16-dkms recoil16ctl
 ```
 
 Without one:
@@ -57,6 +53,9 @@ cd recoil16-dkms
 makepkg -si
 ```
 
+then build and install `recoil16ctl` the same way, from its own AUR package
+(see [amad3v/recoil16ctl](https://github.com/amad3v/recoil16ctl)).
+
 The same `PKGBUILD`s are in this repository under
 [`packaging/aur/`](../packaging/aur). To build a local checkout, including
 committed but unpushed changes:
@@ -66,18 +65,17 @@ cd recoil16/packaging/aur/recoil16-dkms-git
 RECOIL16_GIT="file://$(realpath ../../..)" makepkg -si
 ```
 
-With a self-installed rustup, `makepkg -di` skips the build-dependency check
-and uses the `cargo` on your `PATH`. pacman still checks the runtime
-dependencies when it installs the package.
+**Upgrading from recoil16-dkms 1.3.0 or older:** recoil16ctl 1.4.0 and
+recoil16-dkms 1.3.0 can't both own `/usr/bin/recoil16ctl` and friends, and
+pacman would install them in separate transactions; upgrading the drivers
+first removes the files, then `yay -S recoil16ctl` reinstalls them from its
+own package. Run `yay -Syu` first, then `yay -S recoil16ctl`.
 
 **What pacman does:**
 1. Installs the module sources to `/usr/src/recoil16-<version>/`. The DKMS
    pacman hook builds them for every installed kernel, and again after each
    kernel update.
-2. Builds and installs `recoil16ctl`, the control command, with its man
-   pages (`man recoil16ctl`, `man recoil16`) and bash, zsh and fish
-   completions.
-3. Installs the KDE default shortcut for the Sc key.
+2. Installs the `recoil16(7)` man page.
 
 **Then:**
 
@@ -89,8 +87,9 @@ sudo recoil16ctl battery mode long-life   # optional: charge to ~93% (trickle: ~
 
 **Update:** `git pull`, then `makepkg -si` again, then reboot.
 
-**Remove:** `sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`), then reboot. Removing the
-package deletes its charge-mode udev rule; the EC is back to Standard after the reboot.
+**Remove:** `sudo pacman -R recoil16-dkms` (or `recoil16-dkms-git`), then reboot; remove
+`recoil16ctl` the same way if it's installed. Removing `recoil16ctl` deletes its
+charge-mode udev rule; the EC is back to Standard after the reboot.
 
 ---
 
@@ -105,16 +104,18 @@ sudo scripts/install.sh long-life     # charge mode: standard | long-life | tric
 The script:
 1. Removes any earlier recoil16 DKMS install.
 2. Copies the sources to `/usr/src/recoil16-<version>/` and runs `dkms install`.
-3. Builds `recoil16ctl` with cargo, as your user, and installs it to
-   `/usr/local/bin`.
+3. Installs the `recoil16(7)` man page.
 4. Loads the installed modules and restarts KDE's PowerDevil.
-5. Sets the charge mode.
+5. Sets the charge mode, if `recoil16ctl` is installed (see
+   [amad3v/recoil16ctl](https://github.com/amad3v/recoil16ctl) — otherwise it
+   prints how to get it).
 
 A reboot is not required, but it's the best test that everything loads by
 itself.
 
-**Remove:** `sudo scripts/uninstall.sh`, then reboot. This also removes the
-charge-mode boot rule.
+**Remove:** `sudo scripts/uninstall.sh`, then reboot. This leaves `recoil16ctl`
+and the charge-mode boot rule alone; remove `recoil16ctl` separately to drop
+those too.
 
 ---
 
@@ -139,9 +140,8 @@ dkms status recoil16                  # recoil16/<ver>, <kernel>, x86_64: instal
 # 3. check that the DKMS copy wins over the stock uniwill-laptop
 modinfo -F filename uniwill-laptop    # must be .../updates/dkms/uniwill-laptop.ko*
 
-# 4. the control command (as your user, not root)
-cargo build --release --locked --manifest-path recoil16ctl/Cargo.toml
-sudo install -m 755 recoil16ctl/target/release/recoil16ctl /usr/local/bin/recoil16ctl
+# 4. the control command: build and install it from its own repository
+#    (https://github.com/amad3v/recoil16ctl), or via its AUR package
 
 # 5. reboot, then set the charge mode
 sudo reboot
@@ -153,10 +153,11 @@ sudo recoil16ctl battery mode long-life
 ```sh
 sudo dkms remove recoil16/$VER --all
 sudo rm -rf /usr/src/recoil16-$VER
-sudo rm -f /usr/local/bin/recoil16ctl /etc/modprobe.d/ite8233-lightbar.conf \
-           /etc/udev/rules.d/90-recoil16-charge-mode.rules
 sudo reboot
 ```
+
+Remove `recoil16ctl` separately (see its own repository) to drop the control
+command and the charge-mode udev rule.
 
 ---
 
@@ -172,10 +173,11 @@ This section and the troubleshooting table are also installed as the
    rule that re-applies the mode whenever the driver loads, because the EC
    forgets it at shutdown. `recoil16ctl battery status` shows the battery's
    real health and cycle count.
-2. **Sc key (KDE):** works after the next login. The install adds a
-   default shortcut, listed as **Recoil 16 → Rotate Screen 180°** under
-   System Settings → Keyboard → Shortcuts, where you can change it. If you
-   bound Sc by hand earlier, delete that shortcut, otherwise the two clash.
+2. **Sc key (KDE):** works after the next login once `recoil16ctl` is
+   installed. It adds a default shortcut, listed as **Recoil 16 → Rotate
+   Screen 180°** under System Settings → Keyboard → Shortcuts, where you can
+   change it. If you bound Sc by hand earlier, delete that shortcut,
+   otherwise the two clash.
 3. **Lightbar (optional):** it starts off. Run for example
    `sudo recoil16ctl lightbar blue 60`; the setting is saved and applied at
    every boot.

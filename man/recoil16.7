@@ -73,14 +73,17 @@ Lightbar colour and brightness at boot. Written by \fBrecoil16ctl lightbar\fR.
 .TP
 .I /usr/share/kglobalaccel/recoil16.desktop
 KDE default global shortcut: Sc runs \fBrecoil16ctl screen rotate\fR.
+Installed by the \fBrecoil16ctl\fR package, not this one.
 .TP
 .I /usr/src/recoil16-VERSION/
 Module sources for DKMS.
 .SH REMOVAL
 With the Arch package: \fBsudo pacman \-R recoil16-dkms\fR (or \fBrecoil16-dkms-git\fR), then reboot.
 With the install script: \fBsudo scripts/uninstall.sh\fR from the source tree,
-then reboot. Both remove the charge-mode boot rule; the embedded controller
-is back to Standard after the reboot.
+then reboot. Either way this removes the modules; the charge-mode boot rule
+belongs to \fBrecoil16ctl\fR and is removed with it (its package, or its own
+uninstall script). After that and a reboot, the embedded controller is back
+to Standard.
 .SH TROUBLESHOOTING
 .TP
 DKMS build fails
@@ -117,6 +120,9 @@ Screen rotation talks to the user's KDE session; run it without sudo.
 .SH SEE ALSO
 \fBrecoil16ctl\fR(1), \fBrecoil16ctl\-check\fR(1), \fBdkms\fR(8),
 \fBpowerprofilesctl\fR(1)
+.PP
+\fBrecoil16ctl\fR(1) is installed by the separate \fBrecoil16ctl\fR package:
+\fIhttps://github.com/amad3v/recoil16ctl\fR
 .PP
 Source, installation on other distributions and upstream patches:
 \fIhttps://github.com/amad3v/recoil16\fR
