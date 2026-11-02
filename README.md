@@ -222,23 +222,19 @@ echo 30 | sudo tee $L/brightness
 ```
 
 Fn+F6 / Fn+F7 only report key presses: the embedded controller doesn't change
-this keyboard's light itself. **By default the desktop handles them** (KDE's
-PowerDevil, GNOME's settings daemon, …), so they work in a desktop session and
-on its lock screen, but not at the login screen or on a text console.
+this keyboard's light itself. **The driver handles them** (`key_step`, 10 by
+default), so the keys work everywhere, including the login screen and text
+consoles: the driver takes the two keys before any desktop sees them, steps the
+brightness itself and reports it as a hardware change (`brightness_hw_changed`),
+which UPower passes on to the desktop (tested: KDE Plasma shows its indicator
+and moves the slider).
 
-**Optional: let the driver handle them** with `key_step=10` (see below). Then
-the keys work everywhere, including the login screen and text consoles: the
-driver takes the two keys before any desktop sees them, steps the brightness
-itself and reports it as a hardware change (`brightness_hw_changed`), which
-UPower passes on to the desktop (tested: KDE Plasma shows its indicator and
-moves the slider).
-
-**Known issue with UPower 1.91.4** (the version in Arch as of 2026-09-27): it
-stops watching `brightness_hw_changed` at startup, so with `key_step` set the
-desktop doesn't see the key changes (no indicator, and the slider stays where
-it was, which can also make the desktop restore a wrong brightness after
-idling). This is fixed upstream (UPower commit `ce25d69f`, not yet released),
-and that's why the option is off by default.
+**Needs UPower 1.91.5 or newer.** UPower 1.91.4 stops watching
+`brightness_hw_changed` at startup, so the desktop doesn't see the key changes
+(no indicator, and the slider stays where it was, which can also make the
+desktop restore a wrong brightness after idling). With an older UPower, set
+`key_step=0`: the desktop then handles the keys itself (KDE's PowerDevil,
+GNOME's settings daemon, …), in a session and on its lock screen only.
 
 Writing `brightness` directly works too, but the desktop isn't told about it.
 
@@ -248,11 +244,11 @@ Module parameters (e.g. in `/etc/modprobe.d/ite8291-mono.conf`):
 | ---------------------------------------- | ---------- | ------------------------------------------------------------------------ |
 | `red_scale`, `green_scale`, `blue_scale` | auto (DMI) | White balance, 0-255 per channel                                         |
 | `default_brightness`                     | 25         | Brightness at probe, before `systemd-backlight` restores the saved value |
-| `key_step`                               | 0          | Brightness step for Fn+F6/F7, 0-50; 0 leaves the keys to the desktop     |
+| `key_step`                               | 10         | Brightness step for Fn+F6/F7, 0-50; 0 leaves the keys to the desktop     |
 
 ```
 options ite8291-mono red_scale=160 blue_scale=120
-options ite8291-mono key_step=10      # Fn+F6/F7 handled by the driver (see above)
+options ite8291-mono key_step=0       # Fn+F6/F7 left to the desktop (see above)
 ```
 
 ## Lightbar
@@ -340,7 +336,7 @@ the charge-mode boot rule, and the EC is back to Standard after the reboot.
 
 | Model                      | DMI board  | BIOS        | Kernel        |
 | -------------------------- | ---------- | ----------- | ------------- |
-| PCSpecialist Recoil 16 AMD | `X6FR57TY` | N.1.39PCS10 | 7.2.7-arch1-1 |
+| PCSpecialist Recoil 16 AMD | `X6FR57TY` | N.1.39PCS10 | 7.2.14-arch1-1 |
 
 Other ITE 8291 rev 0.03 keyboards (`048d:6004/6006/600b/ce00`) should work
 with `ite8291-mono` too. Unlisted boards get tuxedo-drivers' default white

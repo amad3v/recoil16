@@ -68,14 +68,14 @@ module_param(default_brightness, int, 0444);
 MODULE_PARM_DESC(default_brightness, "Brightness applied at probe, 0-50 (systemd-backlight restores the saved value afterwards)");
 
 /*
- * Off by default: with key handling on, desktops learn about the change through
- * UPower watching brightness_hw_changed, and UPower 1.91.4 drops that watch at
- * startup (fixed upstream in ce25d69f, "Keep event IO active on ENODATA/EINTR").
- * Until a fixed UPower is common, the keys stay with the desktop unless asked.
+ * Desktops learn about key changes through UPower watching
+ * brightness_hw_changed. UPower 1.91.4 drops that watch at startup (fixed in
+ * 1.91.5, ce25d69f "Keep event IO active on ENODATA/EINTR"); with it, set
+ * key_step=0 to leave the keys to the desktop.
  */
-static int key_step;
+static int key_step = 10;
 module_param(key_step, int, 0444);
-MODULE_PARM_DESC(key_step, "Brightness step for Fn+F6/F7, 0-50 (default 0: leave the keys to userspace)");
+MODULE_PARM_DESC(key_step, "Brightness step for Fn+F6/F7, 0-50 (default 10; 0 leaves the keys to userspace)");
 
 /* ========================================================================== */
 

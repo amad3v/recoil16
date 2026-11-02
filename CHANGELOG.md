@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-02
+
+### Changed
+
+- Fn+F6 / Fn+F7 are handled by ite8291-mono by default (`key_step` 0 → 10):
+  the keyboard backlight keys now work at the login screen and on a text
+  console too. Needs UPower 1.91.5 or newer (in Arch since 2026-10-05) for
+  the desktop's indicator and slider to follow; with an older UPower, set
+  `key_step=0`. If you set `key_step=10` in `/etc/modprobe.d` for 1.2.1 to
+  1.4.0, that line can go.
+- README: a "use at your own risk" notice; tested on kernel 7.2.14.
+- recoil16ctl 1.5.0 `check` warns when the driver handles the keys and UPower
+  is older than 1.91.5.
+
 ## [1.4.0] - 2026-09-30
 
 ### Changed
@@ -105,7 +119,8 @@ the UPower issue above breaks.
   keyboard locks and screen rotation, with man pages and shell completions.
 - DKMS packaging, Arch PKGBUILD, install scripts and a KDE shortcut for Sc.
 
-[Unreleased]: https://github.com/amad3v/recoil16/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/amad3v/recoil16/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/amad3v/recoil16/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/amad3v/recoil16/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/amad3v/recoil16/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/amad3v/recoil16/compare/v1.2.0...v1.2.1

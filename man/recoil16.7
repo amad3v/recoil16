@@ -1,4 +1,4 @@
-.TH RECOIL16 7 "2026-09-25" "recoil16" "recoil16"
+.TH RECOIL16 7 "2026-11-02" "recoil16" "recoil16"
 .SH NAME
 recoil16 \- drivers and tools for the PCSpecialist Recoil 16 AMD (TUXEDO Stellaris 16 Gen7)
 .SH DESCRIPTION
@@ -12,9 +12,9 @@ Replaces the stock module; needs kernel 7.2 or newer.
 .TP
 .B ite8291-mono
 Keyboard backlight (white, 0\-50), as \fI/sys/class/leds/ite8291:white:kbd_backlight\fR.
-Fn+F6/Fn+F7 are handled by the desktop by default; module parameter
-\fBkey_step\fR=10 lets the driver handle them, also without a desktop
-(needs a UPower newer than 1.91.4 for the desktop to follow).
+Fn+F6/Fn+F7 are handled by the driver (module parameter \fBkey_step\fR,
+default 10), also without a desktop; needs UPower 1.91.5 or newer for the
+desktop to follow. \fBkey_step\fR=0 leaves them to the desktop.
 .TP
 .B ite8233-lightbar
 RGB lightbar, as \fI/sys/class/leds/rgb:lightbar\fR.
